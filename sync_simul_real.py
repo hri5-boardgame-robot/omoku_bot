@@ -16,6 +16,8 @@ d = mujoco.MjData(m)
 
 
 # Initialize simulated robot
+mujoco.mj_resetDataKeyframe(m, d, 1)
+mujoco.mj_forward(m, d)
 r = SimulatedRobot(m, d)
 
 # Initialize real robot
@@ -58,10 +60,10 @@ with mujoco.viewer.launch_passive(m, d) as viewer:
                 positions = np.array(positions)
 
                 # Update simulation state
-                d.qpos[:6] = positions
+                r.d.qpos[:6] = positions
 
                 # Step and render
-                mujoco.mj_step(m, d)
+                mujoco.mj_forward(r.m, r.d)
                 viewer.sync()
 
                 # Add small delay for visualization

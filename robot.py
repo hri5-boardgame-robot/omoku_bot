@@ -25,7 +25,7 @@ class MotorControlType(Enum):
 
 
 class Robot:
-    def __init__(self, device_name: str, baudrate=1_000_000, servo_ids=[5, 4, 3, 2, 1, 0]):
+    def __init__(self, device_name: str, baudrate=1_000_000, servo_ids=[1, 2, 3, 4, 5, 6]):
         # def __init__(self, dynamixel, baudrate=1_000_000, servo_ids=[1, 2, 3, 4, 5, 6]):
         self.servo_ids = servo_ids
         # self.dynamixel = dynamixel
@@ -178,14 +178,10 @@ class Robot:
         self._enable_torque()
         self.motor_control_state = MotorControlType.POSITION_CONTROL
 
-    def move_joints(self, goal_positions, move_time=5.0, time_step=0.02):
+    def get_interpolate_pose(self, current_position, goal_positions, move_time=5.0, time_step=0.02):
         """Move multiple joints to specified positions over a duration using cubic interpolation."""
-        # Enable torque on the motors
-        self._enable_torque()
-        self._set_position_control()
 
         # Read current positions
-        current_positions = self.read_position()
         v0 = 0
         vf = 0
         T = move_time
@@ -195,7 +191,7 @@ class Robot:
         # Calculate coefficients for each motor
         coefficients = []
         for i in range(len(self.servo_ids)):
-            q0 = current_positions[i]
+            q0 = current_position[i]
             qf = goal_positions[i]
             a0 = q0
             a1 = v0
@@ -216,10 +212,7 @@ class Robot:
                 position = max(0, min(4096, position))
                 positions_at_t.append(position)
 
-            # Send positions to the motors using set_goal_pos
-
             all_positions.append(positions_at_t)
-            time.sleep(time_step)
 
         return all_positions
 

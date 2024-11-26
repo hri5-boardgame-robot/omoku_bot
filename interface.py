@@ -25,7 +25,7 @@ class SimulatedRobot:
         :param pwm: numpy array of pwm values in range [0, 4096]
         :return: numpy array of joint positions in range [-pi, pi]
         """
-        return (pwm / 2048 - 1) * 3.14159
+        return (pwm / 2048 - 1) * 3.14159265359
 
     def _pwm2norm(self, x: np.ndarray) -> np.ndarray:
         """
@@ -65,7 +65,7 @@ class SimulatedRobot:
     def set_target_pos(self, target_pos):
         self.d.ctrl = target_pos
 
-    def inverse_kinematics(self, ee_target_pos, rate=0.2, joint_name='end_effector'):
+    def inverse_kinematics(self, current_position, ee_target_pos, rate=0.2, joint_name='end_effector'):
         """
         :param ee_target_pos: numpy array of target end effector position
         :param joint_name: name of the end effector joint
@@ -80,7 +80,7 @@ class SimulatedRobot:
         mujoco.mj_jacBodyCom(self.m, self.d, jac, None, joint_id)
 
         # compute target joint velocities
-        qpos = self.read_position()
+        qpos = current_position[:6]
         # 5->6 due to increased njoints
         qdot = np.dot(np.linalg.pinv(jac[:, :6]), ee_target_pos - ee_pos)
 

@@ -16,8 +16,6 @@ d = mujoco.MjData(m)
 
 
 # Initialize simulated robot
-mujoco.mj_resetDataKeyframe(m, d, 1)
-mujoco.mj_forward(m, d)
 r = SimulatedRobot(m, d)
 
 # Initialize real robot
@@ -26,7 +24,7 @@ robot = Robot(device_name='/dev/ttyACM0')
 # Read initial positions and set initial simulation state
 positions = robot.read_position()
 positions = np.array(positions)
-d.qpos[:6] = r._pwm2pos(positions)  # Adjust if necessary
+d.qpos[:6] = r._pwm2pos(positions)
 
 with mujoco.viewer.launch_passive(m, d) as viewer:
     while viewer.is_running():
@@ -36,6 +34,7 @@ with mujoco.viewer.launch_passive(m, d) as viewer:
             # Read the current positions from the real robot
             positions = robot.read_position()
             positions = np.array(positions)
+            print(f"Current positions: {positions}")
             current_qpos = r._pwm2pos(positions)  # Adjust if necessary
 
             # Compute forward kinematics to get the current end-effector position
@@ -46,36 +45,59 @@ with mujoco.viewer.launch_passive(m, d) as viewer:
 
         elif TEST_MODE == 'IK':
             # Define the target end-effector position
-            target_ee_pos = np.array([-0.04745835,  0.15619665,  0.05095877])
+            target_ee_pos = np.array([0.04745835,  0.15619665,  0.05095877])
+            current_position = robot.read_position()
+            current_position = np.array(current_position)
+            current_position = r._pwm2pos(current_position)
+            d.qpos[:6] = current_position
 
-            # Compute the inverse kinematics to get joint positions
-            qpos_ik = r.inverse_kinematics(
-                target_ee_pos, rate=0.2, joint_name='joint6')
+            # Iteratively compute the inverse kinematics to get joint positions
+            max_iterations = 100
+            tolerance = 1e-2
+            for _ in range(max_iterations):
+                qpos_ik = r.inverse_kinematics(current_position,
+                                               target_ee_pos, rate=0.1, joint_name='joint6')
+                d.qpos[:6] = qpos_ik
+                current_position = qpos_ik
+                mujoco.mj_forward(m, d)
+                pwm_values = r._pos2pwm(qpos_ik).astype(int)
 
-            converted_qpos_ik = r._pos2pwm(qpos_ik)
+                time.sleep(0.02)
 
-            interpolated_positions = robot.move_joints(converted_qpos_ik)
+                # Check for convergence
+                ee_pos = d.xpos[mujoco.mj_name2id(
+                    m, mujoco.mjtObj.mjOBJ_BODY, 'joint6')]
+                error = np.linalg.norm(target_ee_pos - ee_pos)
+                if error < tolerance:
+                    print(f"Converged to target position with error: {error}")
+                    break
+
+            # Convert joint positions to PWM values and ensure they are integers
+            pwm_values = r._pos2pwm(qpos_ik).astype(int)
 
             # Visualize each interpolated position in the simulation
+            current_position = robot.read_position()
+            interpolated_positions = robot.get_interpolate_pose(
+                current_position, pwm_values)
             for positions in interpolated_positions:
                 # Convert PWM positions back to joint angles
                 positions = np.array(positions)
                 robot.set_goal_pos(positions)
-
-                converted_positions = r._pwm2pos(positions)
+                print(f"Setting goal position: {positions}")
+                current_qpos = r._pwm2pos(positions)
 
                 # Update simulation state
-                r.d.qpos[:6] = converted_positions
+                d.qpos[:6] = current_qpos
 
                 # Step and render
-                mujoco.mj_forward(r.m, r.d)
+                mujoco.mj_forward(m, d)
                 viewer.sync()
 
                 # Add small delay for visualization
-                # Adjust this value to control visualization speed
                 time.sleep(0.02)
 
-            # break
+            # Disable torque after reaching the target position
+            robot._disable_torque()
 
         # Step the simulation
         mujoco.mj_step(m, d)

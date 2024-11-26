@@ -46,21 +46,26 @@ with mujoco.viewer.launch_passive(m, d) as viewer:
 
         elif TEST_MODE == 'IK':
             # Define the target end-effector position
-            target_ee_pos = np.array([0.04745835,  0.15619665,  0.05095877])
+            target_ee_pos = np.array([-0.04745835,  0.15619665,  0.05095877])
 
             # Compute the inverse kinematics to get joint positions
             qpos_ik = r.inverse_kinematics(
                 target_ee_pos, rate=0.2, joint_name='joint6')
 
-            interpolated_positions = robot.move_joints(qpos_ik)
+            converted_qpos_ik = r._pos2pwm(qpos_ik)
+
+            interpolated_positions = robot.move_joints(converted_qpos_ik)
 
             # Visualize each interpolated position in the simulation
             for positions in interpolated_positions:
                 # Convert PWM positions back to joint angles
                 positions = np.array(positions)
+                robot.set_goal_pos(positions)
+
+                converted_positions = r._pwm2pos(positions)
 
                 # Update simulation state
-                r.d.qpos[:6] = positions
+                r.d.qpos[:6] = converted_positions
 
                 # Step and render
                 mujoco.mj_forward(r.m, r.d)

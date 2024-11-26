@@ -17,7 +17,8 @@ class SimulatedRobot:
         :param pos: numpy array of joint positions in range [-pi, pi]
         :return: numpy array of pwm values in range [0, 4096]
         """
-        return (pos / 3.14159 + 1.) * 4096
+
+        return (pos / 3.14159 + 1.) * 2048
 
     def _pwm2pos(self, pwm: np.ndarray) -> np.ndarray:
         """

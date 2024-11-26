@@ -181,7 +181,8 @@ class Robot:
     def move_joints(self, goal_positions, move_time=5.0, time_step=0.02):
         """Move multiple joints to specified positions over a duration using cubic interpolation."""
         # Enable torque on the motors
-        # self._enable_torque()
+        self._enable_torque()
+        self._set_position_control()
 
         # Read current positions
         current_positions = self.read_position()
@@ -216,7 +217,7 @@ class Robot:
                 positions_at_t.append(position)
 
             # Send positions to the motors using set_goal_pos
-            # self.set_goal_pos(positions_at_t)
+
             all_positions.append(positions_at_t)
             time.sleep(time_step)
 

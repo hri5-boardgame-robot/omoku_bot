@@ -8,6 +8,7 @@ class SimulatedRobot:
         :param m: mujoco model
         :param d: mujoco data
         """
+
         self.m = m
         self.d = d
 
@@ -16,14 +17,14 @@ class SimulatedRobot:
         :param pos: numpy array of joint positions in range [-pi, pi]
         :return: numpy array of pwm values in range [0, 4096]
         """
-        return (pos / 3.14 + 1.) * 4096
+        return (pos / 3.14159 + 1.) * 4096
 
     def _pwm2pos(self, pwm: np.ndarray) -> np.ndarray:
         """
         :param pwm: numpy array of pwm values in range [0, 4096]
         :return: numpy array of joint positions in range [-pi, pi]
         """
-        return (pwm / 2048 - 1) * 3.14
+        return (pwm / 2048 - 1) * 3.14159
 
     def _pwm2norm(self, x: np.ndarray) -> np.ndarray:
         """
@@ -43,7 +44,7 @@ class SimulatedRobot:
         """
         :return: numpy array of current joint positions in range [0, 4096]
         """
-        return self.d.qpos[:6] # 5-> 6
+        return self.d.qpos[:6]  # 5-> 6
 
     def read_velocity(self):
         """
@@ -72,15 +73,16 @@ class SimulatedRobot:
 
         # get the current end effector position
         ee_pos = self.d.geom_xpos[joint_id]
-        
+
         # compute the jacobian
         jac = np.zeros((3, self.m.nv))
         mujoco.mj_jacBodyCom(self.m, self.d, jac, None, joint_id)
-        
+
         # compute target joint velocities
         qpos = self.read_position()
-        qdot = np.dot(np.linalg.pinv(jac[:, :6]), ee_target_pos - ee_pos) # 5->6 due to increased njoints
-        
+        # 5->6 due to increased njoints
+        qdot = np.dot(np.linalg.pinv(jac[:, :6]), ee_target_pos - ee_pos)
+
         # apply the joint velocities
         q_target_pos = qpos + qdot * rate
         return q_target_pos
@@ -110,12 +112,12 @@ class SimulatedRobot:
         jacp = np.zeros((3, self.m.nv))
         jacr = np.zeros((3, self.m.nv))
         mujoco.mj_jacBodyCom(self.m, self.d, jacp, jacr, joint_id)
-        
+
         # compute target joint velocities
         jac = np.vstack([jacp, jacr])
 
         # Orientation error.
-        
+
         mujoco.mju_mat2Quat(site_quat, ee_rot)
         mujoco.mju_mat2Quat(site_target_quat, ee_target_rot)
 
@@ -127,7 +129,7 @@ class SimulatedRobot:
 
         error_pos = ee_target_pos - ee_pos
         error = np.hstack([error_pos, error_rot])
-        
+
         dq = jac.T @ np.linalg.solve(jac @ jac.T + diag, error)
 
         q = self.d.qpos.copy()
@@ -140,3 +142,20 @@ class SimulatedRobot:
         # Step the simulation.
         mujoco.mj_step(self.m, self.d)
 
+    def forward_kinematics(self, qpos):
+        """
+        Computes the end-effector position given joint positions.
+        :param qpos: Joint positions (numpy array)
+        :return: End-effector position (numpy array)
+        """
+        # Update the simulation with the current joint positions
+        self.d.qpos[:len(qpos)] = qpos
+        mujoco.mj_fwdPosition(self.m, self.d)
+
+        # Get the end-effector position
+        ee_body_name = 'joint6'  # Replace with your end-effector link name
+        ee_body_id = mujoco.mj_name2id(
+            self.m, mujoco.mjtObj.mjOBJ_XBODY, ee_body_name)
+        ee_pos = self.d.xpos[ee_body_id].copy()
+
+        return ee_pos

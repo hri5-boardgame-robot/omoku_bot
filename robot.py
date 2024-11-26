@@ -6,6 +6,16 @@ from dynamixel_sdk import GroupSyncRead, GroupSyncWrite, DXL_LOBYTE, DXL_HIBYTE,
 from enum import Enum, auto
 from typing import Union
 
+import enum
+
+
+class OperatingMode(enum.Enum):
+    VELOCITY = 1
+    POSITION = 3
+    CURRENT_CONTROLLED_POSITION = 5
+    PWM = 16
+    UNKNOWN = -1
+
 
 class MotorControlType(Enum):
     PWM = auto()
@@ -167,6 +177,25 @@ class Robot:
             self.dynamixel.set_operating_mode(motor_id, OperatingMode.POSITION)
         self._enable_torque()
         self.motor_control_state = MotorControlType.POSITION_CONTROL
+
+    def set_goal_pos(self, positions):
+        """
+        Sets the goal positions for the servos.
+        :param positions: list or numpy array of position values
+        """
+        if self.motor_control_state != MotorControlType.POSITION_CONTROL:
+            self._set_position_control()
+        for i, motor_id in enumerate(self.servo_ids):
+            position = int(positions[i])
+            data_write = [
+                DXL_LOBYTE(DXL_LOWORD(position)),
+                DXL_HIBYTE(DXL_LOWORD(position)),
+                DXL_LOBYTE(DXL_HIWORD(position)),
+                DXL_HIBYTE(DXL_HIWORD(position))
+            ]
+            self.pos_writer.changeParam(motor_id, data_write)
+
+        self.pos_writer.txPacket()
 
 
 if __name__ == "__main__":

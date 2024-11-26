@@ -178,24 +178,49 @@ class Robot:
         self._enable_torque()
         self.motor_control_state = MotorControlType.POSITION_CONTROL
 
-    def set_goal_pos(self, positions):
-        """
-        Sets the goal positions for the servos.
-        :param positions: list or numpy array of position values
-        """
-        if self.motor_control_state != MotorControlType.POSITION_CONTROL:
-            self._set_position_control()
-        for i, motor_id in enumerate(self.servo_ids):
-            position = int(positions[i])
-            data_write = [
-                DXL_LOBYTE(DXL_LOWORD(position)),
-                DXL_HIBYTE(DXL_LOWORD(position)),
-                DXL_LOBYTE(DXL_HIWORD(position)),
-                DXL_HIBYTE(DXL_HIWORD(position))
-            ]
-            self.pos_writer.changeParam(motor_id, data_write)
+    def move_joints(self, goal_positions, move_time=5.0, time_step=0.02):
+        """Move multiple joints to specified positions over a duration using cubic interpolation."""
+        # Enable torque on the motors
+        # self._enable_torque()
 
-        self.pos_writer.txPacket()
+        # Read current positions
+        current_positions = self.read_position()
+        v0 = 0
+        vf = 0
+        T = move_time
+        num_steps = int(move_time / time_step)
+        time_points = [i * time_step for i in range(num_steps + 1)]
+
+        # Calculate coefficients for each motor
+        coefficients = []
+        for i in range(len(self.servo_ids)):
+            q0 = current_positions[i]
+            qf = goal_positions[i]
+            a0 = q0
+            a1 = v0
+            a2 = (3 * (qf - q0) - (2 * v0 + vf) * T) / (T ** 2)
+            a3 = (-2 * (qf - q0) + (v0 + vf) * T) / (T ** 3)
+            coefficients.append((a0, a1, a2, a3))
+
+        all_positions = []
+
+        for t in time_points:
+            positions_at_t = []
+            for i in range(len(self.servo_ids)):
+                a0, a1, a2, a3 = coefficients[i]
+                # Compute the desired position at time t
+                position = a0 + a1 * t + a2 * (t ** 2) + a3 * (t ** 3)
+                position = int(position)
+                # Ensure the position is within valid range
+                position = max(0, min(4096, position))
+                positions_at_t.append(position)
+
+            # Send positions to the motors using set_goal_pos
+            # self.set_goal_pos(positions_at_t)
+            all_positions.append(positions_at_t)
+            time.sleep(time_step)
+
+        return all_positions
 
 
 if __name__ == "__main__":

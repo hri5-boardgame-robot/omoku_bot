@@ -6,46 +6,69 @@ import mujoco.viewer
 from interface import SimulatedRobot
 from robot import Robot, OperatingMode
 
-# Set this to False when you don't want to interact with the real robot
-USE_REAL_ROBOT = False
+# Set this to 'FK' for forward kinematics testing or 'IK' for inverse kinematics testing
+TEST_MODE = 'IK'
 
 # Load the MuJoCo model
 m = mujoco.MjModel.from_xml_path(
     '/home/ahrilab/Downloads/koch_ik2/low_cost_robot/low_cost_robot.xml')
 d = mujoco.MjData(m)
 
+
 # Initialize simulated robot
 r = SimulatedRobot(m, d)
+
+# Initialize real robot
 robot = Robot(device_name='/dev/ttyACM0')
 
+# Read initial positions and set initial simulation state
+positions = robot.read_position()
+positions = np.array(positions)
+d.qpos[:6] = r._pwm2pos(positions)  # Adjust if necessary
 
 with mujoco.viewer.launch_passive(m, d) as viewer:
     while viewer.is_running():
         step_start = time.time()
-        positions = robot.read_position()
-        positions = np.array(positions)
-        current_qpos = r._pwm2pos(positions)
 
-        # Compute forward kinematics to get the current end-effector position
-        current_ee_pos = r.forward_kinematics(current_qpos)
+        if TEST_MODE == 'FK':
+            # Read the current positions from the real robot
+            positions = robot.read_position()
+            positions = np.array(positions)
+            current_qpos = r._pwm2pos(positions)  # Adjust if necessary
 
-        # Display the current end-effector position
-        print(f"Current end-effector position: {current_ee_pos}")
+            # Compute forward kinematics to get the current end-effector position
+            current_ee_pos = r.forward_kinematics(current_qpos)
 
-        # Update the simulation with the computed joint positions
+            # Display the current end-effector position
+            print(f"Current end-effector position: {current_ee_pos}")
 
-        # Send the position commands to the real robot
-        if USE_REAL_ROBOT:  # Define the target end-effector position
-            target_ee_pos = np.array([0.1, 0.0, 0.1])
+        elif TEST_MODE == 'IK':
+            # Define the target end-effector position
+            target_ee_pos = np.array([0.04745835,  0.15619665,  0.05095877])
 
             # Compute the inverse kinematics to get joint positions
             qpos_ik = r.inverse_kinematics(
                 target_ee_pos, rate=0.2, joint_name='joint6')
-            d.qpos[:6] = qpos_ik[:6]
-            desired_positions = r._pos2pwm(qpos_ik[:6]).astype(int)
 
-            print(f"Desired joint positions: {qpos_ik[:6]}")
-            robot.set_goal_pos(desired_positions)
+            interpolated_positions = robot.move_joints(qpos_ik)
+
+            # Visualize each interpolated position in the simulation
+            for positions in interpolated_positions:
+                # Convert PWM positions back to joint angles
+                positions = np.array(positions)
+
+                # Update simulation state
+                d.qpos[:6] = positions
+
+                # Step and render
+                mujoco.mj_step(m, d)
+                viewer.sync()
+
+                # Add small delay for visualization
+                # Adjust this value to control visualization speed
+                time.sleep(0.02)
+
+            # break
 
         # Step the simulation
         mujoco.mj_step(m, d)

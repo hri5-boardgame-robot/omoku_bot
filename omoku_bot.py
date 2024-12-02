@@ -44,7 +44,7 @@ class omoku_bot:
                     self.target_mode()
                 elif mode == "d":
                     self.debug_mode()
-                    # self.mode_selection()
+                    
     
     def telescope_mode(self):
         while True:

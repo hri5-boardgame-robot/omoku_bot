@@ -155,12 +155,12 @@ class Robot:
         self._enable_torque()
 
     def _disable_torque(self):
-        print(f'disabling torque for servos {self.servo_ids}')
+        # print(f'disabling torque for servos {self.servo_ids}')
         for motor_id in self.servo_ids:
             self.dynamixel._disable_torque(motor_id)
 
     def _enable_torque(self):
-        print(f'enabling torque for servos {self.servo_ids}')
+        # print(f'enabling torque for servos {self.servo_ids}')
         for motor_id in self.servo_ids:
             self.dynamixel._enable_torque(motor_id)
 

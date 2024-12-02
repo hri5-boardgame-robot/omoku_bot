@@ -17,7 +17,6 @@ class SimulatedRobot:
         :param pos: numpy array of joint positions in range [-pi, pi]
         :return: numpy array of pwm values in range [0, 4096]
         """
-
         return (pos / 3.14159 + 1.) * 2048
 
     def _pwm2pos(self, pwm: np.ndarray) -> np.ndarray:
@@ -120,6 +119,7 @@ class SimulatedRobot:
         # Orientation error.
 
         mujoco.mju_mat2Quat(site_quat, ee_rot)
+        # print("size test:", site_quat,site_quat.shape,ee_rot, ee_rot.shape)  
         mujoco.mju_mat2Quat(site_target_quat, ee_target_rot)
 
         mujoco.mju_negQuat(site_quat_conj, site_quat)
@@ -127,22 +127,22 @@ class SimulatedRobot:
         mujoco.mju_mulQuat(error_quat, site_target_quat, site_quat_conj)
 
         mujoco.mju_quat2Vel(error_rot, error_quat, 1.0)
-
+        # print("type testing:", ee_pos, ee_target_pos,error_rot)
         error_pos = ee_target_pos - ee_pos
         error = np.hstack([error_pos, error_rot])
 
         dq = jac.T @ np.linalg.solve(jac @ jac.T + diag, error)
-
+        # print("dq:",dq)
         q = self.d.qpos.copy()
         mujoco.mj_integratePos(self.m, q, dq, integration_dt)
 
         # Set the control signal.
         np.clip(q[:6], *self.m.jnt_range.T[:, :6], out=q[:6])
         self.d.ctrl[:6] = q[:6]
-
         # Step the simulation.
         mujoco.mj_step(self.m, self.d)
-
+        return q[:6]
+    
     def forward_kinematics(self, qpos):
         """
         Computes the end-effector position given joint positions.

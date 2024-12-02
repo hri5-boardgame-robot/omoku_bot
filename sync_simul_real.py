@@ -11,7 +11,7 @@ TEST_MODE = 'IK'
 
 # Load the MuJoCo model
 m = mujoco.MjModel.from_xml_path(
-    '/home/ahrilab/Downloads/koch_ik2/low_cost_robot/low_cost_robot.xml')
+    './low_cost_robot/low_cost_robot.xml')
 d = mujoco.MjData(m)
 
 
@@ -19,8 +19,9 @@ d = mujoco.MjData(m)
 r = SimulatedRobot(m, d)
 
 # Initialize real robot
-robot = Robot(device_name='/dev/ttyACM0')
-
+# robot = Robot(device_name='/dev/ttyACM0')
+robot = Robot(device_name='/dev/tty.usbmodem58760435301')
+# tty.usbmodem58760435301
 # Read initial positions and set initial simulation state
 positions = robot.read_position()
 positions = np.array(positions)
@@ -45,7 +46,11 @@ with mujoco.viewer.launch_passive(m, d) as viewer:
 
         elif TEST_MODE == 'IK':
             # Define the target end-effector position
-            target_ee_pos = np.array([0.04745835,  0.15619665,  0.05095877])
+            destination = input("Enter the desired position: ")
+            destination = destination.split(" ")
+            destination = list(map(float, destination))
+            target_ee_pos = np.array(destination)
+            # target_ee_pos = np.array([0.04745835,  0.15619665,  0.05095877])
             current_position = robot.read_position()
             current_position = np.array(current_position)
             current_position = r._pwm2pos(current_position)

@@ -7,19 +7,22 @@ from interface import SimulatedRobot
 from robot import Robot, OperatingMode
 
 # Set this to 'FK' for forward kinematics testing or 'IK' for inverse kinematics testing
-TEST_MODE = 'IK'
+TEST_MODE = 'FK'
 
 # Load the MuJoCo model
+# m = mujoco.MjModel.from_xml_path(
+#     './low_cost_robot/low_cost_robot.xml')
 m = mujoco.MjModel.from_xml_path(
-    './low_cost_robot/low_cost_robot.xml')
+    'omoku_bot/low_cost_robot/low_cost_robot.xml')
 d = mujoco.MjData(m)
 
 
 # Initialize simulated robot
 r = SimulatedRobot(m, d)
-
+# Current positions: [3084 2038 1984 1013 2036 1969]
 # Initialize real robot
-robot = Robot(device_name='/dev/ttyACM0')
+# robot = Robot(device_name='/dev/ttyACM0')
+robot = Robot(device_name='/dev/tty.usbmodem58760435301')
 
 # Read initial positions and set initial simulation state
 positions = robot.read_position()

@@ -21,8 +21,8 @@ d = mujoco.MjData(m)
 r = SimulatedRobot(m, d)
 # Current positions: [3084 2038 1984 1013 2036 1969]
 # Initialize real robot
-# robot = Robot(device_name='/dev/ttyACM0')
-robot = Robot(device_name='/dev/tty.usbmodem58760435301')
+robot = Robot(device_name='/dev/ttyACM0')
+# robot = Robot(device_name='/dev/tty.usbmodem58760435301')
 
 # Read initial positions and set initial simulation state
 positions = robot.read_position()

@@ -16,20 +16,27 @@ DEFAULT_DOWN_Z = 0.07                      # Lower position for grasp/release
 
 
 class OmokuBot:
-    def __init__(self):
+    def __init__(self, use_real_robot=True):
         """
         Initialize the OmokuBot class, set up the robot, and define workspace boundaries.
+        If use_real_robot=False, code will run simulation only.
         """
+        self.use_real_robot = use_real_robot
         self.robot = None
-        self.r = None
+        self.sim = None
         self.d = None
         self.m = None
         self.viewer = None
-        self.positions = None
+        self.position_pwm = None
 
         # Robot setup
         self.robot_setup()
-        self.positions = self.robot.read_position()
+
+        if self.use_real_robot:
+            self.position_pwm = self.robot.read_position()
+        else:
+            # If no real robot, mock initial positions or use default
+            self.position_pwm = np.array([3084, 2038, 1984, 1013, 2036, 2500])
 
         # Additional parameters
         self.telescope_rate = 1.5e-2
@@ -43,13 +50,19 @@ class OmokuBot:
 
     def robot_setup(self):
         """
-        Set up the Mujoco model and SimulatedRobot interface, and connect to the real robot.
+        Set up the Mujoco model and SimulatedRobot interface, and connect to the real robot if enabled.
         """
         self.m = mujoco.MjModel.from_xml_path(
-            'omoku_bot/low_cost_robot/low_cost_robot.xml')
+            'omoku_bot/low_cost_robot/scene.xml')
         self.d = mujoco.MjData(self.m)
-        self.r = SimulatedRobot(self.m, self.d)
-        self.robot = Robot(device_name='/dev/ttyACM0')
+        self.sim = SimulatedRobot(self.m, self.d)
+
+        if self.use_real_robot:
+            self.robot = Robot(device_name='/dev/ttyACM0')
+        else:
+            # No real robot: robot remains None
+            self.robot = None
+            self.position_pwm = self.sim.read_position()
 
     def init_robot(self):
         """
@@ -60,34 +73,38 @@ class OmokuBot:
         self.release()
         self.move_ee_position(TAKE_PICK_POSITION)
 
+        if self.viewer is not None:
+            self.viewer.sync()
+
     def move_joint(self, positions):
         """
         Move the robot joints to the given PWM positions with interpolation.
         """
-        pwm_values = np.array(positions)
-        current_position = self.robot.read_position()
-        interpolated_positions = self.robot.get_interpolate_pose(
-            current_position, pwm_values
-        )
+        if self.use_real_robot:
+            pwm_values = np.array(positions)
+            current_position = self.robot.read_position()
+            interpolated_positions = self.robot.get_interpolate_pose(
+                current_position, pwm_values
+            )
 
-        for pos in interpolated_positions:
-            pos = np.array(pos)
-            self.robot.set_goal_pos(pos)
-            current_qpos = self.r._pwm2pos(pos)
-            self.d.qpos[:6] = current_qpos[:6]
+            for pos in interpolated_positions:
+                pos = np.array(pos)
+                self.robot.set_goal_pos(pos)
+                current_qpos = self.sim._pwm2pos(pos)
+                self.d.qpos[:6] = current_qpos[:6]
+                mujoco.mj_forward(self.m, self.d)
+                mujoco.mj_step(self.m, self.d)
+                time.sleep(0.01)
+        else:
+            # Simulation-only: set qpos directly
+            current_qpos = self.sim.read_position()
+            conveted_pose = self.sim._pwm2pos(positions)
+            self.d.qpos[:6] = conveted_pose[:6]
             mujoco.mj_forward(self.m, self.d)
-            mujoco.mj_step(self.m, self.d)
-            time.sleep(0.01)
 
     def move_ee_position(self, destination):
-        """
-        Move the end-effector (EE) to the specified 3D position using inverse kinematics.
-        """
         destination = np.array(destination)
-
-        # Define target orientation (fixed orientation in this example)
-        target_ee_rot = R.from_euler(
-            'z', 0, degrees=True).as_matrix().flatten()
+        target_ee_rot = R.from_euler('x', -90, degrees=True).as_matrix()
 
         current_ee_pos = self.d.xpos[mujoco.mj_name2id(
             self.m, mujoco.mjtObj.mjOBJ_BODY, 'joint6')]
@@ -97,41 +114,33 @@ class OmokuBot:
         waypoints = np.linspace(current_ee_pos, destination, num_waypoints)
 
         for waypoint in waypoints:
-            max_iterations = 50000
-            tolerance = 5e-2
+            qpos_ik = self.sim.inverse_kinematics_rot(
+                waypoint, target_ee_rot, rate=0.05, joint_name='joint6'
+            )
 
-            for _ in range(max_iterations):
-                qpos_ik = self.r.inverse_kinematics_rot(
-                    waypoint, target_ee_rot, rate=0.05, joint_name='joint6'
-                )
-                self.d.qpos[:5] = qpos_ik[:5]
-                mujoco.mj_forward(self.m, self.d)
-
-                ee_pos = self.d.xpos[mujoco.mj_name2id(
-                    self.m, mujoco.mjtObj.mjOBJ_BODY, 'joint6')]
-                error = np.linalg.norm(waypoint - ee_pos)
-                if error < tolerance:
-                    break
-            else:
-                print(f"IK did not converge for waypoint {waypoint}")
-                continue
-
-            # Convert joint positions to PWM values
-            pwm_values = self.r._pos2pwm(qpos_ik[:5]).astype(int)
-
-            # Keep current gripper position
-            current_gripper_pwm = self.positions[5]
-            full_pwm_values = np.concatenate(
-                (pwm_values, [current_gripper_pwm]))
-
-            # Send command to the robot
-            self.robot.set_goal_pos(full_pwm_values)
+            # Now qpos_ik is the IK solution after iteration inside inverse_kinematics_rot
+            self.d.qpos[:5] = qpos_ik[:5]
+            mujoco.mj_forward(self.m, self.d)
             time.sleep(0.02)
 
-            # Update simulation with actual robot position
-            current_position = self.robot.read_position()
-            converted_positions = self.r._pwm2pos(np.array(current_position))
-            self.d.qpos[:6] = converted_positions[:6]
+            if self.use_real_robot:
+                # Convert joint positions to PWM values
+                pwm_values = self.sim._pos2pwm(qpos_ik[:5]).astype(int)
+                current_gripper_pwm = self.position_pwm[5]
+                full_pwm_values = np.concatenate(
+                    (pwm_values, [current_gripper_pwm]))
+                self.robot.set_goal_pos(full_pwm_values)
+                time.sleep(0.02)
+
+                # Update simulation from actual robot position
+                current_position = self.robot.read_position()
+                converted_positions = self.sim._pwm2pos(
+                    np.array(current_position))
+                self.d.qpos[:6] = converted_positions[:6]
+            else:
+                # Simulation-only
+                self.d.qpos[:5] = qpos_ik[:5]
+
             mujoco.mj_forward(self.m, self.d)
 
             if self.viewer is not None:
@@ -143,46 +152,72 @@ class OmokuBot:
         mode: "open" or "close"
         """
         if mode == "open":
-            self.positions[5] = 2200
+            self.position_pwm[5] = 2200
         elif mode == "close":
-            self.positions[5] = 1965
+            self.position_pwm[5] = 1965
 
+        # For simulation-only mode, just update simulation state
+        # If use_real_robot, also send commands to hardware
         self._move_gripper()
 
     def _move_gripper(self):
         """
         Internal method to move the gripper to the currently set positions[5].
         """
-        pwm_values = np.array(self.positions)
-        current_position = self.robot.read_position()
-        interpolated_positions = self.robot.get_interpolate_pose(
-            current_position, pwm_values
-        )
+        if self.use_real_robot:
+            pwm_values = np.array(self.position_pwm)
+            current_position = self.robot.read_position()
+            interpolated_positions = self.robot.get_interpolate_pose(
+                current_position, pwm_values
+            )
 
-        for pos in interpolated_positions:
-            pos = np.array(pos)
-            self.robot.set_goal_pos(pos)
-            current_qpos = self.r._pwm2pos(pos)
-            self.d.qpos[:6] = current_qpos[:6]
+            for pos in interpolated_positions:
+                pos = np.array(pos)
+                self.robot.set_goal_pos(pos)
+                current_qpos = self.sim._pwm2pos(pos)
+                self.d.qpos[:6] = current_qpos[:6]
+                mujoco.mj_forward(self.m, self.d)
+                mujoco.mj_step(self.m, self.d)
+                time.sleep(0.01)
+        else:
+            # Simulation-only: update qpos directly
+
+            target_qpos = self.position_pwm
+            current_qpos = self.sim.read_position()
+
+            print("target_qpos", target_qpos)
+            print("current_qpos", current_qpos)
+
+            self.d.qpos[:6] = self.sim._pwm2pos(target_qpos)[:6]
             mujoco.mj_forward(self.m, self.d)
-            mujoco.mj_step(self.m, self.d)
-            time.sleep(0.01)
+            if self.viewer is not None:
+                self.viewer.sync()
+            time.sleep(0.02)
 
     def get_ee_xyz(self):
         """
-        Get the current end-effector XYZ position from the real robot.
+        Get the current end-effector XYZ position.
+        If running simulation-only, returns simulated EE position.
         """
-        positions = np.array(self.robot.read_position())
-        current_qpos = self.r._pwm2pos(positions)
-        current_ee_xyz = self.r.forward_kinematics(current_qpos)
+        if self.use_real_robot:
+            positions = np.array(self.robot.read_position())
+        else:
+            # Simulation-only: Use stored positions or current qpos
+            positions = self.sim.read_position()
+
+        current_qpos = self.sim._pwm2pos(positions)
+        current_ee_xyz = self.sim.forward_kinematics(current_qpos)
         return current_ee_xyz
 
     def get_joint_rad(self):
         """
         Get the current joint angles (in radians).
         """
-        positions = np.array(self.robot.read_position())
-        current_qpos = self.r._pwm2pos(positions)
+        if self.use_real_robot:
+            positions = np.array(self.robot.read_position())
+        else:
+            positions = self.position_pwm
+        current_qpos = self.sim._pwm2pos(positions)
         return current_qpos
 
     def set_workspace(self, x_min, x_max, y_min, y_max):
@@ -194,7 +229,7 @@ class OmokuBot:
         self.y_min_distance = y_min
         self.y_max_distance = y_max
 
-    def move_to_grid(self, grid_x, grid_y, z_plane=0.08):
+    def move_to_grid(self, grid_x, grid_y, z_plane=0.14):
         """
         Move the robot to a specific grid position on a 9x9 grid.
         grid_x, grid_y: integer coordinates between 0 and 8
@@ -215,61 +250,29 @@ class OmokuBot:
         self.move_ee_position(destination)
 
     def grasp(self):
-        """
-        Perform a grasp:
-        1. Move down from current Z=0.14 to Z=0.07
-        2. Close gripper
-        3. Move up back to Z=0.14
-        """
-        current_xyz = self.get_ee_xyz()
-        x, y, _ = current_xyz
-        # Move down
-        self.move_ee_position([x, y, DEFAULT_DOWN_Z])
-        # Close gripper
+        # Example: just close gripper
+        self.position_pwm = self.sim.read_position()
         self.gripper("close")
-        # Move up
-        self.move_ee_position([x, y, DEFAULT_UP_Z])
 
     def release(self):
-        """
-        Perform a release:
-        1. Move down from current Z=0.14 to Z=0.07
-        2. Open gripper
-        3. Move up back to Z=0.14
-        """
-        current_xyz = self.get_ee_xyz()
-        x, y, _ = current_xyz
-        # Move down
-        self.move_ee_position([x, y, DEFAULT_DOWN_Z])
-        # Open gripper
+        # Example: just open gripper
+        self.position_pwm = self.sim.read_position()
         self.gripper("open")
-        # Move up
-        self.move_ee_position([x, y, DEFAULT_UP_Z])
 
     def move_up(self):
-        """
-        Move the robot end-effector straight up to Z=0.14 from current position.
-        """
         current_xyz = self.get_ee_xyz()
         x, y, _ = current_xyz
         self.move_ee_position([x, y, DEFAULT_UP_Z])
 
     def move_down(self):
-        """
-        Move the robot end-effector straight down to Z=0.07 from current position.
-        """
         current_xyz = self.get_ee_xyz()
         x, y, _ = current_xyz
         self.move_ee_position([x, y, DEFAULT_DOWN_Z])
 
-    def _pwm2pos(self, positions):
-        # Placeholder if needed for custom PWM-to-position logic
-        pass
-
-
 # Example usage (uncomment if you want to run this standalone):
 # if __name__ == "__main__":
-#     robot = OmokuBot()
+#     # Set use_real_robot=False to run simulation only
+#     robot = OmokuBot(use_real_robot=False)
 #     robot.init_robot()
 #     robot.set_workspace(-0.07, 0.07, 0.10, 0.24)
 #     robot.move_to_grid(4, 4)

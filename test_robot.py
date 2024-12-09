@@ -1,6 +1,9 @@
 from omoku_bot import OmokuBot
 import time
 
+# Example pick position          # Example "home" hover position
+TAKE_PICK_POSITION = [-0.08, 0.085, 0.14]
+
 
 class TestOmokuBot:
     def __init__(self):
@@ -13,31 +16,29 @@ class TestOmokuBot:
         # self.robot.enroll_workspace()
         # self.robot.move_to_grid(3, 4)  # Example move to grid position (4, 4)
         while True:
-            # Example move to grid position (4, 4)
-            self.robot.move_to_grid(8, 4)
+            self.robot.move_ee_position(TAKE_PICK_POSITION)
             time.sleep(1)
-            print("1")
-            self.robot.move_down()
-            time.sleep(1)
-            print("2")
-            self.robot.grasp()
-            time.sleep(1)
-            print("3")
-            self.robot.move_up()
-            time.sleep(1)
-            print("4")
+            #move grid (0,4)..... (8,4)
             self.robot.move_to_grid(0, 4)
+            time.sleep(1)
+            self.robot.move_to_grid(1, 4)
+            time.sleep(1)
+            self.robot.move_to_grid(2, 4)
+            time.sleep(1)
+            self.robot.move_to_grid(3, 4)
+            time.sleep(1)
+            self.robot.move_to_grid(4, 4)
+            time.sleep(1)
+            self.robot.move_to_grid(5, 4)
+            time.sleep(1)
+            self.robot.move_to_grid(6, 4)
+            time.sleep(1)
+            self.robot.move_to_grid(7, 4)
+            time.sleep(1)
+            self.robot.move_to_grid(8, 4)
 
-            time.sleep(1)
-            print("5")
-            self.robot.move_down()
-            time.sleep(1)
-            print("6")
-            self.robot.release()
-            time.sleep(1)
-            self.robot.move_up()
-            self.robot.move_to_grid(8, 8)
-            print("Done")
+
+
         # self.robot.move_ee_postition([-0.05304016, 0.16248379, 0.09452285])
 
 

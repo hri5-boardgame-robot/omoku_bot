@@ -53,7 +53,7 @@ class OmokuBot:
         Set up the Mujoco model and SimulatedRobot interface, and connect to the real robot if enabled.
         """
         self.m = mujoco.MjModel.from_xml_path(
-            'omoku_bot/low_cost_robot/scene.xml')
+            'low_cost_robot/scene.xml')
         self.d = mujoco.MjData(self.m)
         self.sim = SimulatedRobot(self.m, self.d)
 
@@ -231,7 +231,7 @@ class OmokuBot:
         self.y_min_distance = y_min
         self.y_max_distance = y_max
 
-    def move_to_grid(self, grid_x, grid_y, z_plane=0.14):
+    def move_to_grid(self, grid_y, grid_x, z_plane=0.14):
         """
         Move the robot to a specific grid position on a 9x9 grid.
         grid_x, grid_y: integer coordinates between 0 and 8
@@ -246,7 +246,7 @@ class OmokuBot:
 
         # Calculate the grid position
         x_position = x_min + (x_max - x_min) * (grid_x / 8)
-        y_position = y_min + (y_max - y_min) * (grid_y / 8)
+        y_position = y_min + (y_max - y_min) * (1-(grid_y / 8))
         destination = np.array([x_position, y_position, z_plane])
 
         self.move_ee_position(destination)

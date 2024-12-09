@@ -14,7 +14,7 @@ class TestOmokuBot:
         # self.robot.move_to_grid(3, 4)  # Example move to grid position (4, 4)
         while True:
             # Example move to grid position (4, 4)
-            self.robot.move_to_grid(4, 4)
+            self.robot.move_to_grid(8, 4)
             time.sleep(1)
             print("1")
             self.robot.move_down()
@@ -26,7 +26,7 @@ class TestOmokuBot:
             self.robot.move_up()
             time.sleep(1)
             print("4")
-            self.robot.move_to_grid(1, 4)
+            self.robot.move_to_grid(0, 4)
 
             time.sleep(1)
             print("5")

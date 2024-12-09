@@ -105,6 +105,8 @@ class OmokuBot:
     def move_ee_position(self, destination):
         destination = np.array(destination)
         target_ee_rot = R.from_euler('x', -90, degrees=True).as_matrix()
+        # target_ee_rot = target_ee_rot @ \
+        #     R.from_euler('y', 45, degrees=True).as_matrix()
 
         current_ee_pos = self.d.xpos[mujoco.mj_name2id(
             self.m, mujoco.mjtObj.mjOBJ_BODY, 'joint6')]

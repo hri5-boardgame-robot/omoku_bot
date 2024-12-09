@@ -16,3 +16,5 @@
 #### Just move the robot by hand, and if you press the Enter key, it will provide you with the current EE position
 ---
 ### if you want to exit the current mode, press the "z" 
+
+pip install mink

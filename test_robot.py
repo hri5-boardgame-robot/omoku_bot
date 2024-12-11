@@ -7,7 +7,7 @@ TAKE_PICK_POSITION = [-0.08, 0.085, 0.14]
 
 class TestOmokuBot:
     def __init__(self):
-        self.robot = OmokuBot(use_real_robot=False)
+        self.robot = OmokuBot(use_real_robot = False)
         self.robot.init_robot()
         # self.robot.robot_setup()
 
